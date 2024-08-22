@@ -14,6 +14,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #include <algorithm>
 #include <bit>
 #include <concepts>
+#include <memory>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -342,8 +343,6 @@ struct obj_border {
 // 設定項目．
 ////////////////////////////////
 inline constinit struct Settings {
-	bool hide_dot_border = true;
-
 	enum class grad_type : uint8_t {
 		slope = 0,
 		steps = 1,
@@ -362,6 +361,8 @@ inline constinit struct Settings {
 		.inner{.color{}, .margin{}, .thick{} },
 	}; 
 
+	bool hide_dot_border = true;
+
 	enum class image_align : int8_t {
 		scroll_lo = 0,
 		client_lo = 1,
@@ -372,11 +373,12 @@ inline constinit struct Settings {
 		object_hi = 6,
 	};
 	struct overlay {
-		wchar_t path[MAX_PATH]{};
+		std::unique_ptr<wchar_t[]> path{};
 		byte alpha = 0; bool connect_midpoint = true;
 		constexpr static byte min_alpha = 0, max_alpha = 255;
 		image_align align_h = image_align::scroll_lo, align_v = image_align::scroll_lo;
 		thickness margin{};
+		operator bool() const { return path && alpha > 0; }
 	} overlay_selected, overlay_non_selected;
 
 	// default font: name="Yu Gothic UI", size=-12, wt=400.
@@ -419,11 +421,18 @@ inline constinit struct Settings {
 				FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 				DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, name);
 		};
-		auto read_path = [=]<size_t N>(char const* section, char const* key, wchar_t (&path)[N]) {
-			char buf[3 * N];
-			if (::GetPrivateProfileStringA(section, key, "", buf, std::size(buf), inifile) <= 0 ||
-				::MultiByteToWideChar(CP_UTF8, 0, buf, -1, path, std::size(path)) <= 0)
-				path[0] = L'\0';
+		auto read_path = [=](char const* section, char const* key) -> std::unique_ptr<wchar_t[]> {
+			char buf[3 * MAX_PATH];
+			if (::GetPrivateProfileStringA(section, key, "", buf, std::size(buf), inifile) <= 0)
+				return nullptr;
+
+			wchar_t wbuf[MAX_PATH];
+			auto len = ::MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, std::size(wbuf));
+			if (len <= 0) return nullptr;
+
+			auto ret = std::make_unique_for_overwrite<wchar_t[]>(len);
+			std::wmemcpy(ret.get(), wbuf, len);
+			return ret;
 		};
 
 	#define load_gen(head, key, section, read, write)	head##key =	static_cast<decltype(head##key)>(\
@@ -444,7 +453,7 @@ inline constinit struct Settings {
 		load_thick(border., inner.thick, section);	\
 		border.normalize()
 	#define load_overlay(overlay, section)	\
-		read_path(section, "path", overlay.path);	\
+		overlay.path = read_path(section, "path");	\
 		load_int(overlay., alpha, section);			\
 		load_enum(overlay., align_h, section);		\
 		load_enum(overlay., align_v, section);		\
@@ -537,14 +546,12 @@ static inline constinit struct image_overlay
 	{
 		dispose();
 
-		alpha = settings.alpha;
-		if (alpha == 0) return; // 完全透明ならスキップ．
-		margin = settings.margin;
-		connect_midpoint = settings.connect_midpoint;
-
-		if (settings.path[0] == L'\0') return;
-		auto const img = loader.load(settings.path);
+		if (!settings) return;
+		auto const img = loader.load(settings.path.get());
 		if (!img) return; // 画像の取得失敗．
+
+		alpha = settings.alpha; margin = settings.margin;
+		connect_midpoint = settings.connect_midpoint;
 
 		unit_width = img.width; unit_height = img.height;
 		if (unit_width >= min_width && unit_height >= min_height) {
@@ -564,9 +571,9 @@ static inline constinit struct image_overlay
 
 			auto temp_dc = ::CreateCompatibleDC(src_dc);
 			auto temp_bmp = ::SelectObject(temp_dc, img.bitmap);
-			for (int y = 0; y < rep_y; y++) {
-				for (int x = 0; x < rep_x; x++)
-					::BitBlt(mem_dc, x * unit_width, y * unit_height, unit_width, unit_height,
+			for (int j = 0; j < rep_y; j++) {
+				for (int i = 0; i < rep_x; i++)
+					::BitBlt(mem_dc, i * unit_width, j * unit_height, unit_width, unit_height,
 						temp_dc, 0, 0, SRCCOPY);
 			}
 			::DeleteObject(::SelectObject(temp_dc, temp_bmp));
@@ -995,7 +1002,7 @@ BOOL func_init(AviUtl::FilterPlugin* fp)
 	load_settings(fp->dll_hinst);
 
 	// 背景画像のロード．
-	{
+	if (settings.overlay_non_selected || settings.overlay_selected) {
 		image_loader loader{};
 		auto src_dc = ::GetDC(exedit.fp->hwnd);
 
@@ -1004,6 +1011,8 @@ BOOL func_init(AviUtl::FilterPlugin* fp)
 
 		::ReleaseDC(exedit.fp->hwnd, src_dc);
 	}
+	settings.overlay_non_selected.path = nullptr;
+	settings.overlay_selected.path = nullptr;
 
 	// 描画関数乗っ取り．
 	if (settings.non_selected_border != settings.selected_border ||
@@ -1092,7 +1101,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD fdwReason, LPVOID lpvReserved)
 // 看板．
 ////////////////////////////////
 #define PLUGIN_NAME		"TLオブジェクト描画拡張"
-#define PLUGIN_VERSION	"v1.00"
+#define PLUGIN_VERSION	"v1.01-beta1"
 #define PLUGIN_AUTHOR	"sigma-axis"
 #define PLUGIN_INFO_FMT(name, ver, author)	(name##" "##ver##" by "##author)
 #define PLUGIN_INFO		PLUGIN_INFO_FMT(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR)
