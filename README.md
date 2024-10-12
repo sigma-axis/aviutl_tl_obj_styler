@@ -293,6 +293,12 @@ exterior=-1
 
 ## 改版履歴
 
+- **v1.01** (2024-10-12)
+
+  - 画像を指定していない場合の初期化処理を一部省略．
+
+  - コード整理．
+
 - **v1.00** (2024-08-21)
 
   - 初版．
@@ -366,7 +372,7 @@ SOFTWARE.
 #  連絡・バグ報告
 
 - GitHub: https://github.com/sigma-axis
-- Twitter: https://twitter.com/sigma_axis
+- Twitter: https://x.com/sigma_axis
 - nicovideo: https://www.nicovideo.jp/user/51492481
 - Misskey.io: https://misskey.io/@sigma_axis
 - Bluesky: https://bsky.app/profile/sigma-axis.bsky.social
