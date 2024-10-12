@@ -283,6 +283,8 @@ union thickness {
 		rc.top += top; rc.bottom -= bottom;
 	}
 };
+static_assert(sizeof(thickness) == 4);
+
 struct colored_frame {
 	// 色付き枠線．描画位置も外側の距離として記述できる．
 	Color color;
@@ -704,13 +706,12 @@ private:
 	}
 	static std::pair<ExEdit::Object*, ExEdit::Object*> chain_begin_end(int idx)
 	{
-		auto objects = *exedit.ObjectArray_ptr;
-		auto* obj = &objects[idx];
+		auto const objects = *exedit.ObjectArray_ptr;
+		auto* const obj = &objects[idx];
 		if (obj->index_midpt_leader < 0) return { obj, obj };
 
-		int i = draw_object.drawingIndex, j;
-		while (j = exedit.NextObjectIdxArray[i], j >= 0) i = j;
-		return { &objects[obj->index_midpt_leader], &objects[i] };
+		for (int j; j = exedit.NextObjectIdxArray[idx], j >= 0; idx = j);
+		return { &objects[obj->index_midpt_leader], &objects[idx] };
 	}
 
 	int origin_y_scroll_lo(int, int) const { return timeline_coord.LayerToPoint(0); }
@@ -1003,13 +1004,14 @@ BOOL func_init(AviUtl::FilterPlugin* fp)
 
 	// 背景画像のロード．
 	if (settings.overlay_non_selected || settings.overlay_selected) {
-		image_loader loader{};
-		auto src_dc = ::GetDC(exedit.fp->hwnd);
+		if (image_loader loader{}) {
+			auto src_dc = ::GetDC(exedit.fp->hwnd);
 
-		overlay_non_selected.load(settings.overlay_non_selected, src_dc, loader);
-		overlay_selected.load(settings.overlay_selected, src_dc, loader);
+			overlay_non_selected.load(settings.overlay_non_selected, src_dc, loader);
+			overlay_selected.load(settings.overlay_selected, src_dc, loader);
 
-		::ReleaseDC(exedit.fp->hwnd, src_dc);
+			::ReleaseDC(exedit.fp->hwnd, src_dc);
+		}
 	}
 	settings.overlay_non_selected.path = nullptr;
 	settings.overlay_selected.path = nullptr;
@@ -1101,7 +1103,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD fdwReason, LPVOID lpvReserved)
 // 看板．
 ////////////////////////////////
 #define PLUGIN_NAME		"TLオブジェクト描画拡張"
-#define PLUGIN_VERSION	"v1.01-beta1"
+#define PLUGIN_VERSION	"v1.01-beta2"
 #define PLUGIN_AUTHOR	"sigma-axis"
 #define PLUGIN_INFO_FMT(name, ver, author)	(name##" "##ver##" by "##author)
 #define PLUGIN_INFO		PLUGIN_INFO_FMT(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR)

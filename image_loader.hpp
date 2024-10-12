@@ -13,6 +13,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -31,9 +32,10 @@ namespace sigma_lib::W32::GDI::plus
 		~image_loader() noexcept;
 
 		image_loader(image_loader const&) = delete;
-		image_loader(image_loader&& right) noexcept { this->token = right.token; right.token = 0; }
+		image_loader(image_loader&& right) noexcept { this->token = std::exchange(right.token, 0); }
 
 		result load(wchar_t const* path) const;
+		constexpr operator bool() const { return token != 0; }
 
 	private:
 		ULONG_PTR token;

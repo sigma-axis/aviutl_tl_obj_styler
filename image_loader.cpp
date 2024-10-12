@@ -32,7 +32,7 @@ lib::image_loader::image_loader() noexcept
 
 lib::image_loader::~image_loader() noexcept
 {
-	if (token != 0) {
+	if (*this) {
 		gp::GdiplusShutdown(token);
 		token = 0;
 	}
@@ -43,18 +43,18 @@ lib::image_loader::result lib::image_loader::load(wchar_t const* path) const
 	constexpr result invalid{ nullptr, 0, 0 };
 
 	std::unique_ptr<gp::Bitmap> file{ gp::Bitmap::FromFile(path) };
-	if (file->GetLastStatus() != Gdiplus::Ok) return invalid;
+	if (file->GetLastStatus() != gp::Ok) return invalid;
 
 	int width = file->GetWidth(), height = file->GetHeight();
 	if (width <= 0 || height <= 0) return invalid;
 
 	if (file->GetPixelFormat() != PixelFormat32bppPARGB) {
 		file.reset(file->Clone(0, 0, width, height, PixelFormat32bppPARGB));
-		if (file->GetLastStatus() != Gdiplus::Ok) return invalid;
+		if (!file || file->GetLastStatus() != gp::Ok) return invalid;
 	}
 
 	HBITMAP bmp;
-	if (file->GetHBITMAP({ 0 }, &bmp) != Gdiplus::Ok) return invalid;
+	if (file->GetHBITMAP({ 0 }, &bmp) != gp::Ok) return invalid;
 
 	return { bmp, width, height };
 }
